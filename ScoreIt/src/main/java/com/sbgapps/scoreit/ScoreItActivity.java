@@ -1,13 +1,11 @@
 /*
- * Copyright (C) 2013 SBG Apps
- * http://baiget.fr
- * stephane@baiget.fr
+ * Copyright (c) 2016 SBG Apps
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,347 +16,782 @@
 
 package com.sbgapps.scoreit;
 
-import android.app.AlertDialog;
-import android.app.FragmentManager;
-import android.app.FragmentTransaction;
+import android.Manifest;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.provider.ContactsContract;
+import android.support.annotation.NonNull;
+import android.support.design.widget.AppBarLayout;
+import android.support.design.widget.BottomSheetBehavior;
+import android.support.design.widget.FloatingActionButton;
+import android.support.design.widget.NavigationView;
+import android.support.design.widget.Snackbar;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentTransaction;
+import android.support.v4.content.ContextCompat;
+import android.support.v4.view.GravityCompat;
+import android.support.v4.view.ViewCompat;
+import android.support.v4.view.ViewPropertyAnimatorListenerAdapter;
+import android.support.v4.view.animation.FastOutSlowInInterpolator;
 import android.support.v4.widget.DrawerLayout;
-import android.text.Spannable;
-import android.text.SpannableString;
+import android.support.v7.app.ActionBar;
+import android.support.v7.app.AlertDialog;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.TextView;
+import android.view.animation.Interpolator;
+import android.widget.EditText;
 
-import com.sbgapps.scoreit.game.ClassicBeloteLap;
-import com.sbgapps.scoreit.game.CoincheBeloteLap;
-import com.sbgapps.scoreit.game.FivePlayerTarotLap;
-import com.sbgapps.scoreit.game.FourPlayerTarotLap;
-import com.sbgapps.scoreit.game.GameData;
-import com.sbgapps.scoreit.game.Lap;
-import com.sbgapps.scoreit.game.ThreePlayerTarotLap;
-import com.sbgapps.scoreit.util.TypefaceSpan;
-import com.sbgapps.scoreit.widget.PlayerInfos;
+import com.sbgapps.scoreit.fragments.BeloteLapFragment;
+import com.sbgapps.scoreit.fragments.CoincheLapFragment;
+import com.sbgapps.scoreit.fragments.HeaderFragment;
+import com.sbgapps.scoreit.fragments.LapFragment;
+import com.sbgapps.scoreit.fragments.ScoreChartFragment;
+import com.sbgapps.scoreit.fragments.ScoreListFragment;
+import com.sbgapps.scoreit.fragments.TarotLapFragment;
+import com.sbgapps.scoreit.fragments.UniversalLapFragment;
+import com.sbgapps.scoreit.models.Game;
+import com.sbgapps.scoreit.models.GameManager;
+import com.sbgapps.scoreit.models.Lap;
+import com.sbgapps.scoreit.models.Player;
+import com.sbgapps.scoreit.models.belote.BeloteLap;
+import com.sbgapps.scoreit.models.coinche.CoincheLap;
+import com.sbgapps.scoreit.models.tarot.TarotFiveLap;
+import com.sbgapps.scoreit.models.tarot.TarotFourLap;
+import com.sbgapps.scoreit.models.tarot.TarotThreeLap;
+import com.sbgapps.scoreit.models.universal.UniversalLap;
 
-public class ScoreItActivity extends BaseActivity
-        implements NavigationDrawerFragment.NavigationDrawerListener {
+import java.util.List;
 
-    public static final String KEY_SELECTED_GAME = "selected_game";
-    public static final String EXTRA_LAP = "com.sbgapps.scoreit.lap";
-    public static final String EXTRA_TABLET = "com.sbgapps.scoreit.tablet";
-    public static final String EXTRA_EDIT = "com.sbgapps.scoreit.edit";
+public class ScoreItActivity extends BaseActivity {
+
+    private static final Interpolator INTERPOLATOR = new FastOutSlowInInterpolator();
+
     private static final int REQ_PICK_CONTACT = 1;
-    private static final int REQ_LAP_ACTIVITY = 2;
-    private TypefaceSpan mTypefaceSpan;
-    private GameData mGameData;
-    private SharedPreferences mPreferences;
-    private SpannableString mTitle;
-    private boolean mIsTablet;
-    private TextView mEditedName;
-    private NavigationDrawerFragment mNavigationDrawerFragment;
+    private static final int REQ_SAVED_GAME = 2;
+    private static final int REQ_PERM_READ_CONTACTS = 3;
+
+    private DrawerLayout mDrawerLayout;
+    private FloatingActionButton mActionButton;
+    private BottomSheetBehavior mBottomSheetBehavior;
+    private AppBarLayout mAppBarLayout;
+
+    private GameManager mGameManager;
+    private int mEditedPlayer = Player.PLAYER_NONE;
+    private Lap mLap;
+    private Lap mEditedLap;
+    private boolean mIsEdited = false;
+    private Snackbar mSnackBar;
+
     private ScoreListFragment mScoreListFragment;
-    private GraphFragment mGraphFragment;
+    private ScoreChartFragment mScoreChartFragment;
     private HeaderFragment mHeaderFragment;
+
+    public GameManager getGameManager() {
+        return mGameManager;
+    }
+
+    public Lap getLap() {
+        return mLap;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        setAccentDecor();
-
-        mPreferences = PreferenceManager.getDefaultSharedPreferences(this);
-        final int game = mPreferences.getInt(KEY_SELECTED_GAME, GameData.BELOTE_CLASSIC);
-        mGameData = GameData.getInstance();
-        mGameData.init(this, game);
-
-        setContentView(R.layout.activity_scoreit);
-        mIsTablet = (null != findViewById(R.id.fragment_container_large));
-
-        final FragmentManager fm = getFragmentManager();
-
-        // Init fragments
-        if (null == savedInstanceState) {
-            mHeaderFragment = new HeaderFragment();
-            if (mIsTablet) {
-                mScoreListFragment = new ScoreListFragment();
-                mGraphFragment = new GraphFragment();
-                fm.beginTransaction()
-                        .add(R.id.fragment_header, mHeaderFragment, HeaderFragment.TAG)
-                        .add(R.id.fragment_container, mScoreListFragment, ScoreListFragment.TAG)
-                        .add(R.id.fragment_container_large, mGraphFragment, GraphFragment.TAG)
-                        .commit();
-            } else {
-                mScoreListFragment = new ScoreListFragment();
-                fm.beginTransaction()
-                        .add(R.id.fragment_header, mHeaderFragment, HeaderFragment.TAG)
-                        .add(R.id.fragment_container, mScoreListFragment, ScoreListFragment.TAG)
-                        .commit();
+        mAppBarLayout = (AppBarLayout) findViewById(R.id.appbar);
+        mBottomSheetBehavior = BottomSheetBehavior.from(findViewById(R.id.chart_container));
+        mBottomSheetBehavior.setBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
+            @Override
+            public void onStateChanged(@NonNull View bottomSheet, int newState) {
+                if (BottomSheetBehavior.STATE_COLLAPSED == newState)
+                    mAppBarLayout.setExpanded(true);
             }
+
+            @Override
+            public void onSlide(@NonNull View bottomSheet, float slideOffset) {
+
+            }
+        });
+
+        mGameManager = new GameManager(this);
+        mGameManager.loadGame();
+
+        ActionBar ab = getSupportActionBar();
+        if (null != ab) {
+            ab.setHomeAsUpIndicator(R.drawable.ic_menu_24dp);
+        }
+        setTitle();
+
+        if (null != savedInstanceState) {
+            mLap = (Lap) savedInstanceState.getSerializable("lap");
+            mIsEdited = savedInstanceState.getBoolean("edited");
+            if (mIsEdited) {
+                int position = savedInstanceState.getInt("position");
+                mEditedLap = mGameManager.getLaps().get(position);
+            }
+
+            mHeaderFragment = (HeaderFragment) getSupportFragmentManager()
+                    .findFragmentByTag(HeaderFragment.TAG);
+            mScoreListFragment = (ScoreListFragment) getSupportFragmentManager()
+                    .findFragmentByTag(ScoreListFragment.TAG);
+            mScoreChartFragment = (ScoreChartFragment) getSupportFragmentManager()
+                    .findFragmentByTag(ScoreChartFragment.TAG);
         } else {
-            mHeaderFragment = (HeaderFragment) fm.findFragmentByTag(HeaderFragment.TAG);
-            mGraphFragment = (GraphFragment) fm.findFragmentByTag(GraphFragment.TAG);
-            mScoreListFragment = (ScoreListFragment) fm.findFragmentByTag(ScoreListFragment.TAG);
+            showHeaderFragment(false);
+            showScoreListFragment(false);
+            showScoreChartFragment(false);
         }
 
-        // Init drawer
-        mNavigationDrawerFragment = (NavigationDrawerFragment)
-                fm.findFragmentById(R.id.navigation_drawer);
-        mNavigationDrawerFragment.setUp(
-                R.id.navigation_drawer,
-                (DrawerLayout) findViewById(R.id.drawer_layout), game);
-
-        mTypefaceSpan = new TypefaceSpan(this, "Lobster.otf");
-        setTitle();
-    }
-
-    public TypefaceSpan getTypefaceSpan() {
-        return mTypefaceSpan;
-    }
-
-    public boolean isTablet() {
-        return mIsTablet;
+        setupDrawer();
+        setupActionButton();
     }
 
     @Override
-    public boolean onPrepareOptionsMenu(Menu menu) {
-        if (mNavigationDrawerFragment.isDrawerOpen()) {
-            menu.clear();
-            return false;
-        } else {
-            if (0 == mGameData.getLaps().size()) {
-                MenuItem item;
-                if (!mIsTablet) {
-                    item = menu.findItem(R.id.menu_view);
-                    item.setVisible(false);
-                }
-                item = menu.findItem(R.id.menu_clear);
-                item.setVisible(false);
-            }
-            getActionBar().setTitle(mTitle);
-            return true;
-        }
+    protected int getLayoutResource() {
+        return R.layout.activity_scoreit;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
+            case android.R.id.home:
+                mDrawerLayout.openDrawer(GravityCompat.START);
+                return true;
+
             case R.id.menu_clear:
-                new AlertDialog.Builder(this)
-                        .setMessage(R.string.new_game)
-                        .setPositiveButton(
-                                R.string.clear,
-                                new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        mGameData.deleteAll();
-                                        mHeaderFragment.updateScores();
-                                        if (null != mScoreListFragment && mScoreListFragment.isVisible())
-                                            mScoreListFragment.getListAdapter().removeAll();
-                                        if (null != mGraphFragment && mGraphFragment.isVisible()) {
-                                            mGraphFragment.traceGraph();
-                                            if (!mIsTablet) getFragmentManager().popBackStack();
-                                        }
-                                        invalidateOptionsMenu();
-                                    }
-                                })
-                        .setNegativeButton(
-                                R.string.cancel,
-                                new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        // Nothing to do!
-                                    }
-                                })
-                        .create()
-                        .show();
+                showClearDialogActionChoices();
                 return true;
 
-            case R.id.menu_new:
-                addLap();
+            case R.id.menu_chart:
+                mAppBarLayout.setExpanded(false);
+                mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
                 return true;
 
-            case R.id.menu_view:
-                switchScoreViews();
+            case R.id.menu_count:
+                showPlayerCountDialog();
+                return true;
+
+            case R.id.menu_save:
+                if (mGameManager.getFileUtils().isDefaultFile()) {
+                    showLoadActionChoices();
+                } else {
+                    startSavedGamesActivity();
+                }
+                return true;
+
+            case R.id.menu_total:
+                SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
+                boolean show = sp.getBoolean(GameManager.KEY_UNIVERSAL_TOTAL, false);
+                sp.edit().putBoolean(GameManager.KEY_UNIVERSAL_TOTAL, !show).apply();
+                updateFragments();
                 return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
     @Override
-    public void onNavigationDrawerGameSelected(int game) {
-        getFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
-
-        mPreferences.edit().putInt(KEY_SELECTED_GAME, game).commit();
-        mGameData.setGame(game);
-        setTitle();
-
-        FragmentTransaction ft = getFragmentManager().beginTransaction();
-        ft.setCustomAnimations(R.animator.fade_in, R.animator.fade_out);
-        mHeaderFragment = new HeaderFragment();
-        ft.replace(R.id.fragment_header, mHeaderFragment, HeaderFragment.TAG);
-        ft.commit();
-
-        ft = getFragmentManager().beginTransaction();
-        if (mIsTablet) {
-            ft.setCustomAnimations(R.animator.fade_in, R.animator.fade_out);
-            mScoreListFragment = new ScoreListFragment();
-            mGraphFragment = new GraphFragment();
-            ft.replace(R.id.fragment_container, mScoreListFragment, ScoreListFragment.TAG);
-            ft.replace(R.id.fragment_container_large, mGraphFragment, GraphFragment.TAG);
+    public boolean onCreateOptionsMenu(Menu menu) {
+        if (null == mLap) {
+            getMenuInflater().inflate(R.menu.main, menu);
+            return true;
         } else {
-            ft.setCustomAnimations(R.animator.slide_top_in, R.animator.slide_top_out);
-            mScoreListFragment = new ScoreListFragment();
-            ft.replace(R.id.fragment_container, mScoreListFragment, ScoreListFragment.TAG);
+            return super.onCreateOptionsMenu(menu);
         }
-        ft.commit();
+    }
+
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        if (null != mLap) return true;
+
+        int lapCnt = mGameManager.getLaps().size();
+        int game = mGameManager.getPlayedGame();
+
+        MenuItem item;
+        item = menu.findItem(R.id.menu_chart);
+        item.setVisible(!isTablet() && 0 != lapCnt);
+
+        item = menu.findItem(R.id.menu_clear);
+        item.setVisible(0 != lapCnt);
+
+        item = menu.findItem(R.id.menu_count);
+        item.setVisible(Game.UNIVERSAL == game || Game.TAROT == game);
+
+        item = menu.findItem(R.id.menu_save);
+        List<String> files = mGameManager.getFileUtils().getSavedFiles();
+        item.setVisible(0 != files.size());
+
+        item = menu.findItem(R.id.menu_total);
+        item.setVisible(Game.UNIVERSAL == game);
+
+        return true;
+    }
+
+    private void setupDrawer() {
+        mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
+        NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
+        navigationView.setNavigationItemSelectedListener(
+                new NavigationView.OnNavigationItemSelectedListener() {
+                    @Override
+                    public boolean onNavigationItemSelected(MenuItem menuItem) {
+                        switch (menuItem.getItemId()) {
+                            case R.id.nav_universal:
+                                onGameSelected(Game.UNIVERSAL);
+                                menuItem.setChecked(true);
+                                break;
+                            case R.id.nav_tarot:
+                                onGameSelected(Game.TAROT);
+                                menuItem.setChecked(true);
+                                break;
+                            case R.id.nav_belote:
+                                onGameSelected(Game.BELOTE);
+                                menuItem.setChecked(true);
+                                break;
+                            case R.id.nav_coinche:
+                                onGameSelected(Game.COINCHE);
+                                menuItem.setChecked(true);
+                                break;
+                            case R.id.nav_donate:
+                                startActivity(new Intent(ScoreItActivity.this, DonateActivity.class));
+                                break;
+                            case R.id.nav_about:
+                                startActivity(new Intent(ScoreItActivity.this, AboutActivity.class));
+                                break;
+                        }
+                        mDrawerLayout.closeDrawers();
+                        return true;
+                    }
+                });
+        navigationView.getMenu().getItem(getGameManager().getPlayedGame()).setChecked(true);
+    }
+
+    private void setupActionButton() {
+        mActionButton = (FloatingActionButton) findViewById(R.id.fab);
+        setActionButtonColor();
+        mActionButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (null == mLap) {
+                    showLapScene(null);
+                } else {
+                    showScoreScene();
+                }
+                invalidateOptionsMenu();
+            }
+        });
+    }
+
+    public boolean isTablet() {
+        return (null == mBottomSheetBehavior);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        if (null != mLap) {
+            outState.putBoolean("edited", mIsEdited);
+            if (mIsEdited) {
+                int idx = mGameManager.getLaps().indexOf(mEditedLap);
+                outState.putInt("position", idx);
+            }
+            outState.putSerializable("lap", mLap);
+        }
+        if (Player.PLAYER_NONE != mEditedPlayer) outState.putInt("editedPlayer", mEditedPlayer);
+        super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        mEditedPlayer = savedInstanceState.getInt("editedPlayer", Player.PLAYER_NONE);
+    }
+
+    private void onGameSelected(int game) {
+        if (mGameManager.getPlayedGame() == game) return;
+
+        mGameManager.setPlayedGame(game);
+
+        mLap = null;
+        mEditedLap = null;
+        mIsEdited = false;
+
+        setTitle();
+        animateActionButton();
+        invalidateOptionsMenu();
+        reloadUi();
+    }
+
+    private void setTitle() {
+        String title;
+        switch (mGameManager.getPlayedGame()) {
+            default:
+            case Game.UNIVERSAL:
+                title = getString(R.string.universal);
+                break;
+            case Game.BELOTE:
+                title = getString(R.string.belote);
+                break;
+            case Game.COINCHE:
+                title = getString(R.string.coinche);
+                break;
+            case Game.TAROT:
+                title = getString(R.string.tarot);
+                break;
+        }
+        ActionBar ab = getSupportActionBar();
+        if (null != ab) {
+            ab.setTitle(title);
+        }
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (null != mScoreListFragment) mScoreListFragment.getListView().closeOpenedItems();
+        String name;
         if (RESULT_OK != resultCode) return;
 
         switch (requestCode) {
             case REQ_PICK_CONTACT:
                 Cursor cursor = getContentResolver().query(data.getData(),
                         new String[]{ContactsContract.Contacts.DISPLAY_NAME}, null, null, null);
+                if (null == cursor) break;
                 if (cursor.moveToFirst()) {
                     int columnIndex = cursor.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME);
-                    String name = cursor.getString(columnIndex);
-                    int player = ((PlayerInfos) mEditedName.getParent()).getPlayer();
-                    mGameData.setPlayerName(player, name);
-                    mEditedName.setText(name);
+                    name = cursor.getString(columnIndex);
+                    mGameManager.getPlayer(mEditedPlayer).setName(name.split(" ")[0]);
+                    mEditedPlayer = Player.PLAYER_NONE;
+                    mHeaderFragment.update();
                 }
+                cursor.close();
                 break;
 
-            case REQ_LAP_ACTIVITY:
-                updateFragments();
+            case REQ_SAVED_GAME:
+                mGameManager.loadGame();
                 invalidateOptionsMenu();
+                updateFragments();
                 break;
         }
     }
 
-    public void addLap() {
-        Lap lap;
-        switch (mGameData.getGame()) {
-            default:
-            case GameData.BELOTE_CLASSIC:
-                lap = new ClassicBeloteLap();
-                break;
-            case GameData.BELOTE_COINCHE:
-                lap = new CoincheBeloteLap();
-                break;
-            case GameData.TAROT_3_PLAYERS:
-                lap = new ThreePlayerTarotLap();
-                break;
-            case GameData.TAROT_4_PLAYERS:
-                lap = new FourPlayerTarotLap();
-                break;
-            case GameData.TAROT_5_PLAYERS:
-                lap = new FivePlayerTarotLap();
-                break;
+    @Override
+    public void onBackPressed() {
+        if (mDrawerLayout.isDrawerOpen(GravityCompat.START)) {
+            mDrawerLayout.closeDrawers();
+        } else if (BottomSheetBehavior.STATE_EXPANDED == mBottomSheetBehavior.getState()) {
+            mAppBarLayout.setExpanded(true);
+            mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+        } else {
+            if (null != mLap) {
+                mLap = null;
+                mEditedLap = null;
+                mIsEdited = false;
+                animateActionButton();
+            }
+            invalidateOptionsMenu();
+            super.onBackPressed();
         }
-        showLapActivity(lap, false);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mGameManager.saveGame();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(
+            int requestCode, @NonNull String permissions[], @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case REQ_PERM_READ_CONTACTS: {
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    pickContact();
+                }
+            }
+        }
     }
 
     public void editLap(Lap lap) {
-        showLapActivity(lap, true);
+        showLapScene(lap);
     }
 
-    public void removeLap(Lap lap) {
-        mGameData.removeLap(lap);
+    public void removeLap(final Lap lap) {
+        final int position = mGameManager.removeLap(lap);
+
+        if (null != mHeaderFragment)
+            mHeaderFragment.update();
+        if (null != mScoreListFragment && mScoreListFragment.isVisible())
+            mScoreListFragment.getListAdapter().notifyItemRemoved(position);
+        if (null != mScoreChartFragment && mScoreChartFragment.isVisible())
+            mScoreChartFragment.update();
+
+        invalidateOptionsMenu();
+
+        mSnackBar = Snackbar.make(findViewById(R.id.coordinator),
+                R.string.deleted_lap, Snackbar.LENGTH_LONG);
+        mSnackBar.setAction(R.string.undo, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                int p = position;
+                if (p > mGameManager.getLaps().size())
+                    p = mGameManager.getLaps().size();
+
+                mGameManager.getLaps().add(p, lap);
+                if (null != mHeaderFragment)
+                    mHeaderFragment.update();
+                if (null != mScoreListFragment && mScoreListFragment.isVisible())
+                    mScoreListFragment.getListAdapter().notifyItemInserted(position);
+                if (null != mScoreChartFragment && mScoreChartFragment.isVisible())
+                    mScoreChartFragment.update();
+                invalidateOptionsMenu();
+            }
+        })
+                .setActionTextColor(ColorStateList.valueOf(
+                        ContextCompat.getColor(this, R.color.color_accent)))
+                .show();
+    }
+
+    public void editName(int player) {
+        mEditedPlayer = player;
+        showEditNameActionChoices();
+    }
+
+    private void reloadUi() {
+        showHeaderFragment(true);
+        showScoreListFragment(true);
+        showScoreChartFragment(true);
+    }
+
+    public void updateFragments() {
+        if (null != mHeaderFragment) mHeaderFragment.update();
+        if (null != mScoreListFragment && mScoreListFragment.isVisible())
+            mScoreListFragment.update();
+        if (null != mScoreChartFragment && mScoreChartFragment.isVisible())
+            mScoreChartFragment.update();
+
+        try {
+            getSupportFragmentManager()
+                    .popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+        } catch (IllegalStateException ex) {
+            // No fragment was added
+        }
+    }
+
+    private void showLapScene(Lap lap) {
+        if (null != mSnackBar) mSnackBar.dismiss();
+        mBottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+
+        if (null == lap) {
+            switch (mGameManager.getPlayedGame()) {
+                default:
+                case Game.UNIVERSAL:
+                    mLap = new UniversalLap(mGameManager.getPlayerCount());
+                    break;
+                case Game.BELOTE:
+                    mLap = new BeloteLap();
+                    break;
+                case Game.COINCHE:
+                    mLap = new CoincheLap();
+                    break;
+                case Game.TAROT:
+                    switch (mGameManager.getPlayerCount()) {
+                        case 3:
+                            mLap = new TarotThreeLap();
+                            break;
+                        case 4:
+                            mLap = new TarotFourLap();
+                            break;
+                        case 5:
+                            mLap = new TarotFiveLap();
+                            break;
+                    }
+                    break;
+            }
+        } else {
+            mIsEdited = true;
+            mEditedLap = lap;
+            mLap = lap.copy();
+        }
+        showLapFragment();
+        animateActionButton();
+    }
+
+    private void showScoreScene() {
+        if (mIsEdited) {
+            mEditedLap.set(mLap);
+            mEditedLap = null;
+            mIsEdited = false;
+        } else {
+            mLap.computeScores();
+            mGameManager.addLap(mLap);
+        }
+        mLap = null;
+        animateActionButton();
         updateFragments();
     }
 
-    public void editName(View view) {
-        if (GameData.BELOTE_CLASSIC == mGameData.getGame()
-                || GameData.BELOTE_COINCHE == mGameData.getGame()) {
-            // Do not edit names!
-            return;
+    private void setActionButtonColor() {
+        if (null == mLap) {
+            mActionButton.setImageDrawable(
+                    ContextCompat.getDrawable(this, R.drawable.ic_plus_24dp));
+            mActionButton.setBackgroundTintList(
+                    ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_accent)));
+        } else {
+            mActionButton.setImageDrawable(
+                    ContextCompat.getDrawable(this, R.drawable.ic_done_24dp));
+            mActionButton.setBackgroundTintList(
+                    ColorStateList.valueOf(ContextCompat.getColor(this, R.color.color_primary)));
         }
+    }
 
-        mEditedName = (TextView) view;
-        Intent intent = new Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI);
+    public void animateActionButton() {
+        if (View.VISIBLE == mActionButton.getVisibility()) {
+            ViewCompat.animate(mActionButton).scaleX(0.0F).scaleY(0.0F).alpha(0.0F)
+                    .setInterpolator(INTERPOLATOR).withLayer()
+                    .setListener(new ViewPropertyAnimatorListenerAdapter() {
+                        public void onAnimationEnd(View view) {
+                            mActionButton.setVisibility(View.GONE);
+                            animateActionButton();
+                        }
+                    })
+                    .start();
+        } else {
+            setActionButtonColor();
+            mActionButton.setVisibility(View.VISIBLE);
+            ViewCompat.animate(mActionButton).scaleX(1.0F).scaleY(1.0F).alpha(1.0F)
+                    .setInterpolator(INTERPOLATOR).withLayer().setListener(null)
+                    .start();
+        }
+    }
+
+    private void dismissAll() {
+        mGameManager.deleteAll();
+        mHeaderFragment.update();
+        if (null != mScoreListFragment) mScoreListFragment.update();
+        if (null != mScoreChartFragment) mScoreChartFragment.update();
+        invalidateOptionsMenu();
+    }
+
+    private void startSavedGamesActivity() {
+        Intent intent = new Intent(ScoreItActivity.this, SavedGamesActivity.class);
+        startActivityForResult(intent, REQ_SAVED_GAME);
+    }
+
+    private void showClearDialogActionChoices() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.current_game)
+                .setItems(R.array.clear_actions, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        switch (which) {
+                            default:
+                            case 0:
+                                dismissAll();
+                                break;
+                            case 1:
+                                if (mGameManager.getFileUtils().isDefaultFile()) {
+                                    showSaveFileDialog(false);
+                                } else {
+                                    if (null != mSnackBar) mSnackBar.dismiss();
+                                    mGameManager.saveGame();
+                                    mGameManager.createGame();
+                                    invalidateOptionsMenu();
+                                    updateFragments();
+                                }
+                                break;
+                        }
+                    }
+                })
+                .create()
+                .show();
+    }
+
+    private void showEditNameActionChoices() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.edit_name)
+                .setItems(R.array.edit_name_action, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        switch (which) {
+                            default:
+                            case 0:
+                                if (ContextCompat.checkSelfPermission(ScoreItActivity.this,
+                                        Manifest.permission.READ_CONTACTS)
+                                        != PackageManager.PERMISSION_GRANTED) {
+                                    ActivityCompat.requestPermissions(ScoreItActivity.this,
+                                            new String[]{Manifest.permission.READ_CONTACTS},
+                                            REQ_PERM_READ_CONTACTS);
+                                } else {
+                                    pickContact();
+                                }
+                                break;
+                            case 1:
+                                showEditNameDialog();
+                                break;
+                        }
+                    }
+                })
+                .create()
+                .show();
+    }
+
+    private void pickContact() {
+        Intent intent = new Intent(Intent.ACTION_PICK,
+                ContactsContract.Contacts.CONTENT_URI);
         startActivityForResult(intent, REQ_PICK_CONTACT);
     }
 
-    public void start(View view) {
-        addLap();
+    private void showLoadActionChoices() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.current_game)
+                .setItems(R.array.load_actions, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        switch (which) {
+                            default:
+                            case 0:
+                                startSavedGamesActivity();
+                                break;
+                            case 1:
+                                showSaveFileDialog(true);
+                                break;
+                        }
+                    }
+                })
+                .create()
+                .show();
     }
 
-    private void updateFragments() {
-        mHeaderFragment.updateScores();
-        if (null != mScoreListFragment && mScoreListFragment.isVisible())
-            mScoreListFragment.getListAdapter().notifyDataSetChanged();
-        if (null != mGraphFragment && mGraphFragment.isVisible())
-            mGraphFragment.traceGraph();
-    }
-
-    private void showLapActivity(Lap lap, boolean edit) {
-        Intent intent;
-        switch (mGameData.getGame()) {
+    public void showPlayerCountDialog() {
+        String[] players;
+        switch (mGameManager.getPlayedGame()) {
             default:
-            case GameData.BELOTE_CLASSIC:
-                intent = new Intent(this, BeloteLapActivity.class);
+                players = new String[]{"2", "3", "4", "5", "6", "7", "8"};
                 break;
-            case GameData.BELOTE_COINCHE:
-                intent = new Intent(this, CoincheLapActivity.class);
-                break;
-            case GameData.TAROT_3_PLAYERS:
-            case GameData.TAROT_4_PLAYERS:
-            case GameData.TAROT_5_PLAYERS:
-                intent = new Intent(this, TarotLapActivity.class);
+            case Game.TAROT:
+                players = new String[]{"3", "4", "5"};
                 break;
         }
-        intent.putExtra(EXTRA_LAP, lap);
-        intent.putExtra(EXTRA_TABLET, mIsTablet);
-        intent.putExtra(EXTRA_EDIT, edit);
 
-        startActivityForResult(intent, REQ_LAP_ACTIVITY);
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.player_number)
+                .setItems(players, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        mGameManager.setPlayerCount(which);
+                        invalidateOptionsMenu();
+                        reloadUi();
+                    }
+                })
+                .create()
+                .show();
     }
 
-    private void switchScoreViews() {
-        if (null != mGraphFragment && mGraphFragment.isVisible()) {
-            getFragmentManager().popBackStack();
-            return;
+    private void showEditNameDialog() {
+        View view = getLayoutInflater().inflate(R.layout.dialog_input_text, null);
+        final EditText editText = (EditText) view.findViewById(R.id.edit_text);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.edit_name)
+                .setView(view)
+                .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        String name = editText.getText().toString();
+                        if (!name.isEmpty()) {
+                            mGameManager.getPlayer(mEditedPlayer).setName(name);
+                            mEditedPlayer = Player.PLAYER_NONE;
+                            mHeaderFragment.update();
+                            if (mScoreListFragment.isVisible()) mScoreListFragment.update();
+                        }
+                    }
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .create()
+                .show();
+    }
+
+    private void showSaveFileDialog(final boolean load) {
+        View view = getLayoutInflater().inflate(R.layout.dialog_input_text, null);
+        final EditText editText = (EditText) view.findViewById(R.id.edit_text);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.filename)
+                .setView(view)
+                .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        String file = editText.getText().toString();
+                        mGameManager.saveGame(file);
+                        mGameManager.createGame();
+                        if (load) {
+                            startSavedGamesActivity();
+                        } else {
+                            dismissAll();
+                            updateFragments();
+                        }
+                    }
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .create()
+                .show();
+    }
+
+    private void showHeaderFragment(boolean anim) {
+        mHeaderFragment = new HeaderFragment();
+
+        FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
+        if (anim) ft.setCustomAnimations(R.anim.fade_in, R.anim.fade_out);
+        ft.replace(R.id.header_container, mHeaderFragment, HeaderFragment.TAG);
+        ft.commit();
+    }
+
+    private void showScoreListFragment(boolean anim) {
+        mScoreListFragment = new ScoreListFragment();
+
+        FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
+        if (anim) ft.setCustomAnimations(R.anim.fade_in, R.anim.fade_out);
+        ft.replace(R.id.main_container, mScoreListFragment, ScoreListFragment.TAG);
+        ft.commit();
+    }
+
+    private void showScoreChartFragment(boolean anim) {
+        mScoreChartFragment = new ScoreChartFragment();
+
+        FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
+        if (anim) ft.setCustomAnimations(R.anim.fade_in, R.anim.fade_out);
+        ft.replace(R.id.chart_container, mScoreChartFragment, ScoreChartFragment.TAG);
+        ft.commit();
+    }
+
+    private void showLapFragment() {
+        Fragment fragment;
+        switch (mGameManager.getPlayedGame()) {
+            default:
+            case Game.UNIVERSAL:
+                fragment = new UniversalLapFragment();
+                break;
+            case Game.BELOTE:
+                fragment = new BeloteLapFragment();
+                break;
+            case Game.COINCHE:
+                fragment = new CoincheLapFragment();
+                break;
+            case Game.TAROT:
+                fragment = new TarotLapFragment();
+                break;
         }
-
-        if (null == mGraphFragment)
-            mGraphFragment = new GraphFragment();
-
-        getFragmentManager()
+        getSupportFragmentManager()
                 .beginTransaction()
-                .setCustomAnimations(
-                        R.animator.slide_bottom_in,
-                        R.animator.slide_top_out,
-                        R.animator.slide_top_in,
-                        R.animator.slide_bottom_out)
                 .addToBackStack(null)
-                .replace(R.id.fragment_container, mGraphFragment, GraphFragment.TAG)
+                .setCustomAnimations(R.anim.fade_in, R.anim.fade_out)
+                .replace(R.id.main_container, fragment, LapFragment.TAG)
                 .commit();
-    }
-
-    private void setTitle() {
-        switch (mGameData.getGame()) {
-            default:
-            case GameData.BELOTE_CLASSIC:
-                mTitle = new SpannableString(getResources().getString(R.string.belote));
-                break;
-            case GameData.BELOTE_COINCHE:
-                mTitle = new SpannableString(getResources().getString(R.string.coinche));
-                break;
-            case GameData.TAROT_3_PLAYERS:
-            case GameData.TAROT_4_PLAYERS:
-            case GameData.TAROT_5_PLAYERS:
-                mTitle = new SpannableString(getResources().getString(R.string.tarot));
-                break;
-        }
-        mTitle.setSpan(mTypefaceSpan, 0, mTitle.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
     }
 }

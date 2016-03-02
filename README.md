@@ -1,22 +1,21 @@
-ScoreIt Application
+ScoreIt
 =======================
 
-An application to count points to popular French card games:
-- Belote
+<a href="https://play.google.com/store/apps/details?id=com.sbgapps.scoreit&utm_source=global_co&utm_medium=prtnr&utm_content=Mar2515&utm_campaign=PartBadge&pcampaignid=MKT-AC-global-none-all-co-pr-py-PartBadges-Oct1515-1"><img alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/images/apps/en-play-badge.png" /></a>
+
+An application to count points for games:
+- Universal counter
 - Tarot
+- Belote
+- Coinche
 
 ![screenshot](https://raw.github.com/StephaneBg/ScoreItProject/master/screenshot.png "screenshot")
-
-Download
---------
-
-[Google Play](https://play.google.com/store/apps/details?id=com.sbgapps.scoreit)
 
 
 Credits
 -------
 
-Author: [Stéphane Baiget](https://github.com/StephaneBg)
+Author: [StÃ©phane Baiget](https://github.com/StephaneBg)
 
 
 License

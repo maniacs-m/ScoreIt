@@ -1,13 +1,11 @@
 /*
- * Copyright (C) 2013 SBG Apps
- * http://baiget.fr
- * stephane@baiget.fr
+ * Copyright (c) 2016 SBG Apps
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,46 +16,69 @@
 
 package com.sbgapps.scoreit;
 
-import android.app.Activity;
-import android.content.Context;
-import android.os.Build;
 import android.os.Bundle;
-import android.view.Window;
+import android.support.v4.app.NavUtils;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
+import android.util.DisplayMetrics;
+import android.util.TypedValue;
+import android.view.MenuItem;
 import android.view.WindowManager;
 
-import com.readystatesoftware.systembartint.SystemBarTintManager;
-
-import uk.co.chrisjenx.calligraphy.CalligraphyConfig;
-import uk.co.chrisjenx.calligraphy.CalligraphyContextWrapper;
+import com.sbgapps.scoreit.R;
 
 /**
- * Created by sbaiget on 08/01/14.
+ * Created by Stéphane on 31/07/2014.
  */
-public class BaseActivity extends Activity {
+public abstract class BaseActivity extends AppCompatActivity {
+
+    private Toolbar mToolbar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        CalligraphyConfig.initDefault("fonts/Roboto-Light.ttf");
+        setContentView(getLayoutResource());
+
+        mToolbar = (Toolbar) findViewById(R.id.toolbar);
+        if (mToolbar != null) setSupportActionBar(mToolbar);
+
+        setupFauxDialog();
     }
+
+    public Toolbar getToolbar() {
+        return mToolbar;
+    }
+
+    protected abstract int getLayoutResource();
 
     @Override
-    protected void attachBaseContext(Context newBase) {
-        super.attachBaseContext(new CalligraphyContextWrapper(newBase));
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case android.R.id.home:
+                NavUtils.navigateUpFromSameTask(this);
+        }
+        return super.onOptionsItemSelected(item);
     }
 
-    public void setAccentDecor() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            Window win = getWindow();
-            WindowManager.LayoutParams winParams = win.getAttributes();
-            winParams.flags |= WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS;
-            winParams.flags |= WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION;
-            win.setAttributes(winParams);
-            SystemBarTintManager tintManager = new SystemBarTintManager(this);
-            tintManager.setStatusBarTintEnabled(true);
-            tintManager.setStatusBarTintResource(R.drawable.scoreit_background_accent);
-            tintManager.setNavigationBarTintEnabled(true);
-            tintManager.setNavigationBarTintResource(R.drawable.scoreit_background_black);
+    private void setupFauxDialog() {
+        TypedValue tv = new TypedValue();
+        boolean isDialog = getTheme().resolveAttribute(R.attr.isDialog, tv, true) && (0 != tv.data);
+        if (isDialog) {
+            DisplayMetrics dm = getResources().getDisplayMetrics();
+
+            WindowManager.LayoutParams params = getWindow().getAttributes();
+            params.width = getResources().getDimensionPixelSize(R.dimen.dialog_width);
+            params.height = Math.min(
+                    getResources().getDimensionPixelSize(R.dimen.dialog_max_height),
+                    dm.heightPixels * 3 / 4);
+            params.alpha = 1.0f;
+            params.dimAmount = 0.5f;
+            getWindow().setAttributes(params);
+        }
+
+        if (null != mToolbar) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(!isDialog);
+            getSupportActionBar().setHomeButtonEnabled(!isDialog);
         }
     }
 }

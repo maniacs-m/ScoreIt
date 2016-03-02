@@ -1,15 +1,11 @@
-<?xml version="1.0" encoding="utf-8"?>
-
-<!--
-  ~ Copyright (C) 2013 SBG Apps
-  ~ http://baiget.fr
-  ~ stephane@baiget.fr
+<?xml version="1.0" encoding="utf-8"?><!--
+  ~ Copyright (c) 2016 SBG Apps
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
   ~ You may obtain a copy of the License at
   ~
-  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~    http://www.apache.org/licenses/LICENSE-2.0
   ~
   ~ Unless required by applicable law or agreed to in writing, software
   ~ distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,26 +13,25 @@
   ~ See the License for the specific language governing permissions and
   ~ limitations under the License.
   -->
-
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context="ScoreItActivity">
 
     <TextView
-        style="?android:listSeparatorTextViewStyle"
-        android:layout_width="match_parent"
+        style="@style/Headline"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/partner"/>
+        android:layout_marginBottom="@dimen/default_margin"
+        android:text="@string/partner" />
 
     <Spinner
-        android:layout_height="@dimen/default_height"
+        android:id="@+id/spinner_partner"
         android:layout_width="match_parent"
-        android:layout_marginTop="@dimen/default_margin"
-        android:layout_marginRight="@dimen/default_double_margin"
-        android:layout_marginLeft="@dimen/default_double_margin"
-        android:spinnerMode="dialog"
-        android:id="@+id/spinner_partner"/>
-
+        android:layout_height="@dimen/widget_height"
+        android:layout_marginBottom="@dimen/default_margin"
+        android:layout_marginLeft="@dimen/activity_horizontal_margin"
+        android:layout_marginRight="@dimen/activity_horizontal_margin" />
 </LinearLayout>
